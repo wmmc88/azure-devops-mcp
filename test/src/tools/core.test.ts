@@ -336,7 +336,7 @@ describe("configureCoreTools", () => {
           ],
           null,
           2
-        )
+        ) + "\nPagination info: Returned 2 teams (all teams in project)."
       );
     });
 
@@ -411,6 +411,68 @@ describe("configureCoreTools", () => {
       expect(mockCoreApi.getTeams).toHaveBeenCalled();
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain("Error fetching project teams: Unknown error occurred");
+    });
+
+    it("should show pagination info when results equal requested top value", async () => {
+      configureCoreTools(server, tokenProvider, connectionProvider);
+
+      const call = (server.tool as jest.Mock).mock.calls.find(([toolName]) => toolName === "core_list_project_teams");
+
+      if (!call) throw new Error("core_list_project_teams tool not registered");
+      const [, , , handler] = call;
+
+      // Mock 10 teams when requesting top=10 (indicating there might be more)
+      const mockTeams = Array.from({ length: 10 }, (_, i) => ({
+        id: `team-${i}`,
+        name: `Team ${i}`,
+        url: `https://dev.azure.com/fabrikam/_apis/projects/test/teams/team-${i}`,
+        description: `Team ${i} description`,
+        identityUrl: `https://vssps.dev.azure.com/fabrikam/_apis/Identities/team-${i}`,
+      }));
+      
+      (mockCoreApi.getTeams as jest.Mock).mockResolvedValue(mockTeams);
+
+      const params = {
+        project: "test-project",
+        mine: undefined,
+        top: 10,
+        skip: 0,
+      };
+
+      const result = await handler(params);
+
+      expect(result.content[0].text).toContain("Pagination info: Returned 10 teams. There may be more teams - use 'skip=10' to get the next batch.");
+    });
+
+    it("should show pagination info when using skip parameter", async () => {
+      configureCoreTools(server, tokenProvider, connectionProvider);
+
+      const call = (server.tool as jest.Mock).mock.calls.find(([toolName]) => toolName === "core_list_project_teams");
+
+      if (!call) throw new Error("core_list_project_teams tool not registered");
+      const [, , , handler] = call;
+
+      // Mock 5 teams when skipping first 10
+      const mockTeams = Array.from({ length: 5 }, (_, i) => ({
+        id: `team-${i + 10}`,
+        name: `Team ${i + 10}`,
+        url: `https://dev.azure.com/fabrikam/_apis/projects/test/teams/team-${i + 10}`,
+        description: `Team ${i + 10} description`,
+        identityUrl: `https://vssps.dev.azure.com/fabrikam/_apis/Identities/team-${i + 10}`,
+      }));
+      
+      (mockCoreApi.getTeams as jest.Mock).mockResolvedValue(mockTeams);
+
+      const params = {
+        project: "test-project",
+        mine: undefined,
+        top: 100,
+        skip: 10,
+      };
+
+      const result = await handler(params);
+
+      expect(result.content[0].text).toContain("Pagination info: Returned 5 teams (skipped first 10).");
     });
   });
 
