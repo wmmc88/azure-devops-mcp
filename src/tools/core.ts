@@ -24,7 +24,7 @@ function filterProjectsByName(projects: ProjectInfo[], projectNameFilter: string
 function configureCoreTools(server: McpServer, tokenProvider: () => Promise<AccessToken>, connectionProvider: () => Promise<WebApi>) {
   server.tool(
     CORE_TOOLS.list_project_teams,
-    "Retrieve a list of teams for the specified Azure DevOps project. Use pagination (top/skip) for large projects with many teams.",
+    "Retrieve a list of teams for the specified Azure DevOps project. For large projects, use pagination: 'top' sets the batch size (max teams per request), 'skip' sets how many teams to skip from the start. Example: top=100,skip=0 gets teams 1-100; top=100,skip=100 gets teams 101-200.",
     {
       project: z.string().describe("The name or ID of the Azure DevOps project."),
       mine: z.boolean().optional().describe("If true, only return teams that the authenticated user is a member of."),
