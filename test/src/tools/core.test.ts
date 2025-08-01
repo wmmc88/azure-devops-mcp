@@ -336,7 +336,7 @@ describe("configureCoreTools", () => {
           ],
           null,
           2
-        )
+        ) + "\nPagination info: Returned 2 teams (all teams in project)."
       );
     });
 
@@ -413,7 +413,7 @@ describe("configureCoreTools", () => {
       expect(result.content[0].text).toContain("Error fetching project teams: Unknown error occurred");
     });
 
-    it("should filter teams by name when teamNameFilter is provided", async () => {
+    it("should show pagination info when results equal requested top value", async () => {
       configureCoreTools(server, tokenProvider, connectionProvider);
 
       const call = (server.tool as jest.Mock).mock.calls.find(([toolName]) => toolName === "core_list_project_teams");
@@ -421,49 +421,30 @@ describe("configureCoreTools", () => {
       if (!call) throw new Error("core_list_project_teams tool not registered");
       const [, , , handler] = call;
 
-      (mockCoreApi.getTeams as jest.Mock).mockResolvedValue([
-        {
-          id: "564e8204-a90b-4432-883b-d4363c6125ca",
-          name: "Quality assurance",
-          url: "https://dev.azure.com/fabrikam/_apis/projects/eb6e4656-77fc-42a1-9181-4c6d8e9da5d1/teams/564e8204-a90b-4432-883b-d4363c6125ca",
-          description: "Testing staff",
-          identityUrl: "https://vssps.dev.azure.com/fabrikam/_apis/Identities/564e8204-a90b-4432-883b-d4363c6125ca",
-        },
-        {
-          id: "66df9be7-3586-467b-9c5f-425b29afedfd",
-          name: "Fabrikam-Fiber-TFVC Team",
-          url: "https://dev.azure.com/fabrikam/_apis/projects/eb6e4656-77fc-42a1-9181-4c6d8e9da5d1/teams/66df9be7-3586-467b-9c5f-425b29afedfd",
-          description: "The default project team.",
-          identityUrl: "https://vssps.dev.azure.com/fabrikam/_apis/Identities/66df9be7-3586-467b-9c5f-425b29afedfd",
-        },
-        {
-          id: "123e4567-e89b-12d3-a456-426614174000",
-          name: "Development Team",
-          url: "https://dev.azure.com/fabrikam/_apis/projects/eb6e4656-77fc-42a1-9181-4c6d8e9da5d1/teams/123e4567-e89b-12d3-a456-426614174000",
-          description: "Development staff",
-          identityUrl: "https://vssps.dev.azure.com/fabrikam/_apis/Identities/123e4567-e89b-12d3-a456-426614174000",
-        },
-      ]);
+      // Mock 10 teams when requesting top=10 (indicating there might be more)
+      const mockTeams = Array.from({ length: 10 }, (_, i) => ({
+        id: `team-${i}`,
+        name: `Team ${i}`,
+        url: `https://dev.azure.com/fabrikam/_apis/projects/test/teams/team-${i}`,
+        description: `Team ${i} description`,
+        identityUrl: `https://vssps.dev.azure.com/fabrikam/_apis/Identities/team-${i}`,
+      }));
+      
+      (mockCoreApi.getTeams as jest.Mock).mockResolvedValue(mockTeams);
 
       const params = {
-        project: "eb6e4656-77fc-42a1-9181-4c6d8e9da5d1",
+        project: "test-project",
         mine: undefined,
-        top: undefined,
-        skip: undefined,
-        teamNameFilter: "Team",
+        top: 10,
+        skip: 0,
       };
 
       const result = await handler(params);
 
-      expect(mockCoreApi.getTeams).toHaveBeenCalledWith("eb6e4656-77fc-42a1-9181-4c6d8e9da5d1", undefined, undefined, undefined, false);
-
-      const filteredTeams = JSON.parse(result.content[0].text);
-      expect(filteredTeams).toHaveLength(2);
-      expect(filteredTeams[0].name).toBe("Fabrikam-Fiber-TFVC Team");
-      expect(filteredTeams[1].name).toBe("Development Team");
+      expect(result.content[0].text).toContain("Pagination info: Returned 10 teams. There may be more teams - use 'skip=10' to get the next batch.");
     });
 
-    it("should handle case-insensitive team filtering", async () => {
+    it("should show pagination info when using skip parameter", async () => {
       configureCoreTools(server, tokenProvider, connectionProvider);
 
       const call = (server.tool as jest.Mock).mock.calls.find(([toolName]) => toolName === "core_list_project_teams");
@@ -471,68 +452,27 @@ describe("configureCoreTools", () => {
       if (!call) throw new Error("core_list_project_teams tool not registered");
       const [, , , handler] = call;
 
-      (mockCoreApi.getTeams as jest.Mock).mockResolvedValue([
-        {
-          id: "564e8204-a90b-4432-883b-d4363c6125ca",
-          name: "Quality Assurance",
-          url: "https://dev.azure.com/fabrikam/_apis/projects/eb6e4656-77fc-42a1-9181-4c6d8e9da5d1/teams/564e8204-a90b-4432-883b-d4363c6125ca",
-          description: "Testing staff",
-          identityUrl: "https://vssps.dev.azure.com/fabrikam/_apis/Identities/564e8204-a90b-4432-883b-d4363c6125ca",
-        },
-        {
-          id: "66df9be7-3586-467b-9c5f-425b29afedfd",
-          name: "Development Team",
-          url: "https://dev.azure.com/fabrikam/_apis/projects/eb6e4656-77fc-42a1-9181-4c6d8e9da5d1/teams/66df9be7-3586-467b-9c5f-425b29afedfd",
-          description: "Development staff",
-          identityUrl: "https://vssps.dev.azure.com/fabrikam/_apis/Identities/66df9be7-3586-467b-9c5f-425b29afedfd",
-        },
-      ]);
+      // Mock 5 teams when skipping first 10
+      const mockTeams = Array.from({ length: 5 }, (_, i) => ({
+        id: `team-${i + 10}`,
+        name: `Team ${i + 10}`,
+        url: `https://dev.azure.com/fabrikam/_apis/projects/test/teams/team-${i + 10}`,
+        description: `Team ${i + 10} description`,
+        identityUrl: `https://vssps.dev.azure.com/fabrikam/_apis/Identities/team-${i + 10}`,
+      }));
+      
+      (mockCoreApi.getTeams as jest.Mock).mockResolvedValue(mockTeams);
 
       const params = {
-        project: "eb6e4656-77fc-42a1-9181-4c6d8e9da5d1",
+        project: "test-project",
         mine: undefined,
-        top: undefined,
-        skip: undefined,
-        teamNameFilter: "quality",
+        top: 100,
+        skip: 10,
       };
 
       const result = await handler(params);
 
-      const filteredTeams = JSON.parse(result.content[0].text);
-      expect(filteredTeams).toHaveLength(1);
-      expect(filteredTeams[0].name).toBe("Quality Assurance");
-    });
-
-    it("should return empty array when teamNameFilter matches no teams", async () => {
-      configureCoreTools(server, tokenProvider, connectionProvider);
-
-      const call = (server.tool as jest.Mock).mock.calls.find(([toolName]) => toolName === "core_list_project_teams");
-
-      if (!call) throw new Error("core_list_project_teams tool not registered");
-      const [, , , handler] = call;
-
-      (mockCoreApi.getTeams as jest.Mock).mockResolvedValue([
-        {
-          id: "564e8204-a90b-4432-883b-d4363c6125ca",
-          name: "Quality Assurance",
-          url: "https://dev.azure.com/fabrikam/_apis/projects/eb6e4656-77fc-42a1-9181-4c6d8e9da5d1/teams/564e8204-a90b-4432-883b-d4363c6125ca",
-          description: "Testing staff",
-          identityUrl: "https://vssps.dev.azure.com/fabrikam/_apis/Identities/564e8204-a90b-4432-883b-d4363c6125ca",
-        },
-      ]);
-
-      const params = {
-        project: "eb6e4656-77fc-42a1-9181-4c6d8e9da5d1",
-        mine: undefined,
-        top: undefined,
-        skip: undefined,
-        teamNameFilter: "NonexistentTeam",
-      };
-
-      const result = await handler(params);
-
-      const filteredTeams = JSON.parse(result.content[0].text);
-      expect(filteredTeams).toHaveLength(0);
+      expect(result.content[0].text).toContain("Pagination info: Returned 5 teams (skipped first 10).");
     });
   });
 
